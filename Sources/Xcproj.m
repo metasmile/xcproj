@@ -501,74 +501,43 @@ static void WorkaroundRadar18512876(void)
     destFilePath = [destFilePath stringByAppendingPathComponent:[sourceFilePath lastPathComponent]];
 
     //resolving relative path
-    NSArray * relativeDirs = [destFilePath pathComponents];
+    NSArray const * relativeDirs = [destFilePath pathComponents];
     relativeDirs = [relativeDirs subarrayWithRange:NSMakeRange(projectRootPath.pathComponents.count, relativeDirs.count-projectRootPath.pathComponents.count-1)];
 
     if([[relativeDirs firstObject] isNotEqualTo:projectTargetGroupName]){
-        ddprintf(@"[!] WARNING : A relative path of destination file is located outside of current TARGET path %@.\n", targetPath);
+        ddprintf(@"[!] WARNING : A relative path of destination file 'destFilePath' is located outside of current TARGET path '%@'.\n", targetPath);
     }
 
-    NSLog(@"dd");
-    NSLog(@"%@",[self groupNamed:_project.rootGroup.name parentGroup:nil]);
+    @try {
+        [[NSFileManager defaultManager] createDirectoryAtPath:destFilePath withIntermediateDirectories:YES attributes:nil error:NULL];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:destFilePath]) {
+            [[NSFileManager defaultManager] removeItemAtPath:destFilePath error:NULL];
+        }
 
-    [relativeDirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
-        if(idx==0){
-            [self addGroupNamed:obj beforeGroupNamed:_project.rootGroup.name];
+        NSError *error = nil;
+        if([[NSFileManager defaultManager] copyItemAtPath:sourceFilePath toPath:destFilePath error:&error]){
+            [relativeDirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+                if(idx==0){
+                    [self addGroupNamed:obj beforeGroupNamed:_project.rootGroup.name];
+                }else{
+                    [self addGroupNamed:obj inGroupNamed:relativeDirs[idx-1]];
+                }
+
+                if([[relativeDirs lastObject] isEqualTo:obj]){
+                    id<PBXFileReference> bundleReference = [self addFileAtPath:destFilePath];
+                    [self addFileReference:bundleReference inGroupNamed:obj];
+                    [self addFileReference:bundleReference toBuildPhase:@"Resources"];
+                }
+            }];
+
         }else{
-            [self addGroupNamed:obj inGroupNamed:relativeDirs[idx-1]];
+            ddprintf(@"[!] Resource file copy failed.%@\n");
         }
 
-        if([[relativeDirs lastObject] isEqualTo:obj]){
-            id<PBXFileReference> bundleReference = [self addFileAtPath:destFilePath];
-            [self addFileReference:bundleReference inGroupNamed:obj];
-            [self addFileReference:bundleReference toBuildPhase:@"Resources"];
-        }
-    }];
-
-
-////
-////            for (NSString *resourcesBundlePath in arguments)
-////            {
-////                id<PBXFileReference> bundleReference = [self addFileAtPath:resourcesBundlePath];
-////                [self addFileReference:bundleReference inGroupNamed:@"Bundles"];
-////                [self addFileReference:bundleReference toBuildPhase:@"Resources"];
-////            }
-
-
-
-//    BOOL copied = NO;
-//    @try {
-//        [[NSFileManager defaultManager] createDirectoryAtPath:destFilePath withIntermediateDirectories:YES attributes:nil error:NULL];
-//        if ([[NSFileManager defaultManager] fileExistsAtPath:destFilePath]) {
-//            [[NSFileManager defaultManager] removeItemAtPath:destFilePath error:NULL];
-//        }
-//
-//        NSError *error = nil;
-//        if([[NSFileManager defaultManager] copyItemAtPath:sourceFilePath toPath:destFilePath error:&error]){
-//
-//
-//
-////            NSLog(@"%@ %@ %@", sourceFilePath, destFilePath, [self groupNamed:projectMainGroupName parentGroup:NULL]);
-//
-////            for(NSString * p in [[NSFileManager defaultManager] subpathsOfDirectoryAtPath:destFilePath error:NULL]){
-//
-//
-//
-////            [self addGroupNamed:@"Bundles" inGroupNamed:projectMainGroupName];
-////
-////            for (NSString *resourcesBundlePath in arguments)
-////            {
-////                id<PBXFileReference> bundleReference = [self addFileAtPath:resourcesBundlePath];
-////                [self addFileReference:bundleReference inGroupNamed:@"Bundles"];
-////                [self addFileReference:bundleReference toBuildPhase:@"Resources"];
-////            }
-//
-//        }
-//    }@catch (NSException * exc) {
-//        ddprintf(@"%@\n", exc.reason);
-//        return EX_IOERR;
-//    }
-//    NSLog(@"%d", copied);
+    }@catch (NSException * exc) {
+        ddprintf(@"%@\n", exc.reason);
+        return EX_IOERR;
+    }
 
     return [self writeProject];
 }
