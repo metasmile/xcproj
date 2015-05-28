@@ -343,7 +343,7 @@ static void WorkaroundRadar18512876(void)
 	         @"     Add an xcconfig file to the project and base all configurations on it\n\n"
 	         @" * add-resources-bundle <bundle_paths> ...\n"
 	         @"     Add multiple bundles to default group in the project and in the `Copy Bundle Resources` build phase\n\n"
-             @" * put-resource-bundle <source_file_absolute_path_to_read> [<dest_dir_path_in_project (default=Resources, relative or absolute)>]\n"
+             @" * put-resource-bundle <source_file_absolute_path_to_read> [<dest_dir_path> (default=Resources, relative or absolute)>]\n"
              @"     Copy or rewrite a file, and then Add a bundle to target path in the project and in the `Copy Bundle Resources` build phase\n\n"
 	         @" * touch\n"
 	         @"     Rewrite the project file\n");
@@ -471,7 +471,8 @@ static void WorkaroundRadar18512876(void)
     }
 
     //check source file valid
-    NSString * sourceFilePath = [arguments firstObject];
+    NSString * sourceFilePath = [[arguments firstObject] stringByStandardizingPath];
+
     if (![[NSFileManager defaultManager] fileExistsAtPath:sourceFilePath]){
         @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A source file %@ does not exists.", sourceFilePath] exitCode:EX_OSFILE];
     }
@@ -482,50 +483,94 @@ static void WorkaroundRadar18512876(void)
         @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A path of source file %@ must be absolute path.", sourceFilePath] exitCode:EX_IOERR];
     }
 
-    NSString * projectMainGroupName = _target.name;
+    NSString * projectTargetGroupName = _target.name;
     NSString * projectRootPath = [[NSFileManager defaultManager] currentDirectoryPath];
     NSString * targetPath = [projectRootPath stringByAppendingPathComponent:_target.name];
-    NSString *destFilePath = [targetPath stringByAppendingPathComponent:@"Resources"];
-    //setting path
+    NSString * destFilePath = [targetPath stringByAppendingPathComponent:@"Resources"];
+    //set dest path
     if(arguments.count==2){
         destFilePath = [[arguments lastObject] stringByStandardizingPath];
         if(![destFilePath isAbsolutePath]){
             destFilePath = [projectRootPath stringByAppendingPathComponent:destFilePath];
         }
+
+        if(![[destFilePath stringByDeletingLastPathComponent] hasPrefix:projectRootPath]){
+            @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A path of destination file '%@' must be locate inside of base path of project '%@'.", sourceFilePath,projectRootPath] exitCode:EX_IOERR];
+        }
     }
     destFilePath = [destFilePath stringByAppendingPathComponent:[sourceFilePath lastPathComponent]];
 
-    BOOL copied = NO;
-    @try {
-        [[NSFileManager defaultManager] createDirectoryAtPath:destFilePath withIntermediateDirectories:YES attributes:nil error:NULL];
-        if ([[NSFileManager defaultManager] fileExistsAtPath:destFilePath]) {
-            [[NSFileManager defaultManager] removeItemAtPath:destFilePath error:NULL];
-        }
+    //resolving relative path
+    NSArray * relativeDirs = [destFilePath pathComponents];
+    relativeDirs = [relativeDirs subarrayWithRange:NSMakeRange(projectRootPath.pathComponents.count, relativeDirs.count-projectRootPath.pathComponents.count-1)];
 
-        NSError *error = nil;
-        NSLog(@"%@ %@ %@", sourceFilePath, destFilePath, [self groupNamed:projectMainGroupName parentGroup:NULL]);
-        if([[NSFileManager defaultManager] copyItemAtPath:sourceFilePath toPath:destFilePath error:&error]){
-//            [self addGroupNamed:@"Bundles" inGroupNamed:@"Frameworks"];
-//
-//            for (NSString *resourcesBundlePath in arguments)
-//            {
-//                id<PBXFileReference> bundleReference = [self addFileAtPath:resourcesBundlePath];
-//                [self addFileReference:bundleReference inGroupNamed:@"Bundles"];
-//                [self addFileReference:bundleReference toBuildPhase:@"Resources"];
-//            }
-
-        }
-    }@catch (NSException * exc) {
-        ddprintf(@"%@\n", exc.reason);
-    }@finally {
-        return EX_IOERR;
+    if([[relativeDirs firstObject] isNotEqualTo:projectTargetGroupName]){
+        ddprintf(@"[!] WARNING : A relative path of destination file is located outside of current TARGET path %@.\n", targetPath);
     }
 
-//    [[NSFileManager defaultManager] fileExistsAtPath:<#(NSString *)path#>];
+    NSLog(@"dd");
+    NSLog(@"%@",[self groupNamed:_project.rootGroup.name parentGroup:nil]);
 
-    NSLog(@"%d", copied);
+    [relativeDirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+        if(idx==0){
+            [self addGroupNamed:obj beforeGroupNamed:_project.rootGroup.name];
+        }else{
+            [self addGroupNamed:obj inGroupNamed:relativeDirs[idx-1]];
+        }
 
-    return EX_OK;
+        if([[relativeDirs lastObject] isEqualTo:obj]){
+            id<PBXFileReference> bundleReference = [self addFileAtPath:destFilePath];
+            [self addFileReference:bundleReference inGroupNamed:obj];
+            [self addFileReference:bundleReference toBuildPhase:@"Resources"];
+        }
+    }];
+
+
+////
+////            for (NSString *resourcesBundlePath in arguments)
+////            {
+////                id<PBXFileReference> bundleReference = [self addFileAtPath:resourcesBundlePath];
+////                [self addFileReference:bundleReference inGroupNamed:@"Bundles"];
+////                [self addFileReference:bundleReference toBuildPhase:@"Resources"];
+////            }
+
+
+
+//    BOOL copied = NO;
+//    @try {
+//        [[NSFileManager defaultManager] createDirectoryAtPath:destFilePath withIntermediateDirectories:YES attributes:nil error:NULL];
+//        if ([[NSFileManager defaultManager] fileExistsAtPath:destFilePath]) {
+//            [[NSFileManager defaultManager] removeItemAtPath:destFilePath error:NULL];
+//        }
+//
+//        NSError *error = nil;
+//        if([[NSFileManager defaultManager] copyItemAtPath:sourceFilePath toPath:destFilePath error:&error]){
+//
+//
+//
+////            NSLog(@"%@ %@ %@", sourceFilePath, destFilePath, [self groupNamed:projectMainGroupName parentGroup:NULL]);
+//
+////            for(NSString * p in [[NSFileManager defaultManager] subpathsOfDirectoryAtPath:destFilePath error:NULL]){
+//
+//
+//
+////            [self addGroupNamed:@"Bundles" inGroupNamed:projectMainGroupName];
+////
+////            for (NSString *resourcesBundlePath in arguments)
+////            {
+////                id<PBXFileReference> bundleReference = [self addFileAtPath:resourcesBundlePath];
+////                [self addFileReference:bundleReference inGroupNamed:@"Bundles"];
+////                [self addFileReference:bundleReference toBuildPhase:@"Resources"];
+////            }
+//
+//        }
+//    }@catch (NSException * exc) {
+//        ddprintf(@"%@\n", exc.reason);
+//        return EX_IOERR;
+//    }
+//    NSLog(@"%d", copied);
+
+    return [self writeProject];
 }
 
 - (int) touch:(NSArray *)arguments
