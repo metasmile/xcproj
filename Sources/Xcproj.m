@@ -319,7 +319,7 @@ static void WorkaroundRadar18512876(void)
 
 - (NSArray *) allowedActions
 {
-	return [NSArray arrayWithObjects:@"list-targets", @"list-headers", @"read-build-setting", @"write-build-setting", @"add-xcconfig", @"add-resources-bundle", @"touch", nil];
+	return [NSArray arrayWithObjects:@"list-targets", @"list-headers", @"read-build-setting", @"write-build-setting", @"add-xcconfig", @"add-resources-bundle", @"put-resource-bundle", @"touch", nil];
 }
 
 - (void) printUsage:(int)exitCode
@@ -341,8 +341,10 @@ static void WorkaroundRadar18512876(void)
 	         @"     Assign a value to a build setting. If the build setting does not exist, it is added to the target\n\n"
 	         @" * add-xcconfig <xcconfig_path>\n"
 	         @"     Add an xcconfig file to the project and base all configurations on it\n\n"
-	         @" * add-resources-bundle <bundle_path>\n"
-	         @"     Add a bundle to the project and in the `Copy Bundle Resources` build phase\n\n"
+	         @" * add-resources-bundle <bundle_paths> ...\n"
+	         @"     Add multiple bundles to default group in the project and in the `Copy Bundle Resources` build phase\n\n"
+             @" * put-resource-bundle <source_file_absolute_path_to_read> [<dest_dir_path_in_project (default=Resources, relative or absolute)>]\n"
+             @"     Copy or rewrite a file, and then Add a bundle to target path in the project and in the `Copy Bundle Resources` build phase\n\n"
 	         @" * touch\n"
 	         @"     Rewrite the project file\n");
 	exit(exitCode);
@@ -459,6 +461,66 @@ static void WorkaroundRadar18512876(void)
 	}
 	
 	return [self writeProject];
+}
+
+- (int) putResourceBundle:(NSArray *)arguments
+{
+    if(arguments.count<1 || arguments.count>2){
+        ddprintf(@"Wrong arguments input. See usage\n");
+        [self printUsage:EX_USAGE];
+    }
+
+    //check source file valid
+    NSString * sourceFilePath = [arguments firstObject];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:sourceFilePath]){
+        @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A source file %@ does not exists.", sourceFilePath] exitCode:EX_OSFILE];
+    }
+    if (![[NSFileManager defaultManager] isReadableFileAtPath:sourceFilePath]){
+        @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A source file %@ can't read.", sourceFilePath] exitCode:EX_IOERR];
+    }
+    if (![sourceFilePath isAbsolutePath]){
+        @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A path of source file %@ must be absolute path.", sourceFilePath] exitCode:EX_IOERR];
+    }
+
+    NSString * projectRootPath = [[NSFileManager defaultManager] currentDirectoryPath];
+    NSString * targetPath = [projectRootPath stringByAppendingPathComponent:_target.name];
+    NSString *destFilePath = [targetPath stringByAppendingPathComponent:@"Resources"];
+    //setting path
+    if(arguments.count==2){
+        destFilePath = [[arguments lastObject] stringByStandardizingPath];
+        if(![destFilePath isAbsolutePath]){
+            destFilePath = [projectRootPath stringByAppendingPathComponent:destFilePath];
+        }
+    }
+    destFilePath = [destFilePath stringByAppendingPathComponent:[sourceFilePath lastPathComponent]];
+    
+    BOOL copied = NO;
+    @try {
+        NSError *error = nil;
+        if([[NSFileManager defaultManager] copyItemAtPath:sourceFilePath toPath:destFilePath error:&error]){
+
+            NSLog(@"%@ %@", sourceFilePath, destFilePath);
+
+//            [self addGroupNamed:@"Bundles" inGroupNamed:@"Frameworks"];
+//
+//            for (NSString *resourcesBundlePath in arguments)
+//            {
+//                id<PBXFileReference> bundleReference = [self addFileAtPath:resourcesBundlePath];
+//                [self addFileReference:bundleReference inGroupNamed:@"Bundles"];
+//                [self addFileReference:bundleReference toBuildPhase:@"Resources"];
+//            }
+
+        }
+    }@finally {
+
+    }
+
+
+//    [[NSFileManager defaultManager] fileExistsAtPath:<#(NSString *)path#>];
+
+    NSLog(@"%d", copied);
+
+    return EX_OK;
 }
 
 - (int) touch:(NSArray *)arguments
