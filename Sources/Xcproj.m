@@ -505,7 +505,7 @@ static void WorkaroundRadar18512876(void)
     relativeDirs = [relativeDirs subarrayWithRange:NSMakeRange(projectRootPath.pathComponents.count, relativeDirs.count-projectRootPath.pathComponents.count-1)];
 
     if([[relativeDirs firstObject] isNotEqualTo:projectTargetGroupName]){
-        ddprintf(@"[!] WARNING : A relative path of destination file 'destFilePath' is located outside of current TARGET path '%@'.\n", targetPath);
+        ddprintf(@"[!] WARNING : A relative path of destination file '%@' is located outside of current TARGET path '%@'.\n", destFilePath, targetPath);
     }
 
     @try {
