@@ -482,6 +482,7 @@ static void WorkaroundRadar18512876(void)
         @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A path of source file %@ must be absolute path.", sourceFilePath] exitCode:EX_IOERR];
     }
 
+    NSString * projectMainGroupName = _target.name;
     NSString * projectRootPath = [[NSFileManager defaultManager] currentDirectoryPath];
     NSString * targetPath = [projectRootPath stringByAppendingPathComponent:_target.name];
     NSString *destFilePath = [targetPath stringByAppendingPathComponent:@"Resources"];
@@ -493,14 +494,17 @@ static void WorkaroundRadar18512876(void)
         }
     }
     destFilePath = [destFilePath stringByAppendingPathComponent:[sourceFilePath lastPathComponent]];
-    
+
     BOOL copied = NO;
     @try {
+        [[NSFileManager defaultManager] createDirectoryAtPath:destFilePath withIntermediateDirectories:YES attributes:nil error:NULL];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:destFilePath]) {
+            [[NSFileManager defaultManager] removeItemAtPath:destFilePath error:NULL];
+        }
+
         NSError *error = nil;
+        NSLog(@"%@ %@ %@", sourceFilePath, destFilePath, [self groupNamed:projectMainGroupName parentGroup:NULL]);
         if([[NSFileManager defaultManager] copyItemAtPath:sourceFilePath toPath:destFilePath error:&error]){
-
-            NSLog(@"%@ %@", sourceFilePath, destFilePath);
-
 //            [self addGroupNamed:@"Bundles" inGroupNamed:@"Frameworks"];
 //
 //            for (NSString *resourcesBundlePath in arguments)
@@ -511,10 +515,11 @@ static void WorkaroundRadar18512876(void)
 //            }
 
         }
+    }@catch (NSException * exc) {
+        ddprintf(@"%@\n", exc.reason);
     }@finally {
-
+        return EX_IOERR;
     }
-
 
 //    [[NSFileManager defaultManager] fileExistsAtPath:<#(NSString *)path#>];
 
