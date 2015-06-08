@@ -12,6 +12,7 @@
 #import <objc/runtime.h>
 #import "XCDUndocumentedChecker.h"
 #import "XMLPlistDecoder.h"
+#import "Xcproj+FileUtils.h"
 
 @implementation Xcproj
 {
@@ -203,25 +204,28 @@ static void WorkaroundRadar18512876(void)
 	[optionsParser addOptionsFromTable:optionTable];
 }
 
-- (void) setProject:(NSString *)projectName
+- (void) setProject:(NSString *)projectPath
 {
 	[self.class initializeXcproj];
+
+    if (![PBXProject isProjectWrapperExtension:[projectPath pathExtension]])
+		@throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"The project name %@ does not have a valid extension.", projectPath] exitCode:EX_USAGE];
 	
-	if (![PBXProject isProjectWrapperExtension:[projectName pathExtension]])
-		@throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"The project name %@ does not have a valid extension.", projectName] exitCode:EX_USAGE];
-	
-	NSString *projectPath = projectName;
-	if (![projectName isAbsolutePath])
-		projectPath = [[[NSFileManager defaultManager] currentDirectoryPath] stringByAppendingPathComponent:projectName];
-	
+	if (![projectPath isAbsolutePath]){
+        projectPath = [[[NSFileManager defaultManager] currentDirectoryPath] stringByAppendingPathComponent:projectPath];
+    }else{
+        //change current path
+        [[NSFileManager defaultManager] changeCurrentDirectoryPath:[[projectPath stringByStandardizingPath] stringByDeletingLastPathComponent]];
+    }
+
 	if (![[NSFileManager defaultManager] fileExistsAtPath:projectPath])
-		@throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"The project %@ does not exist in this directory.", projectName] exitCode:EX_NOINPUT];
-	
+		@throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"The project %@ does not exist in this directory.", projectPath] exitCode:EX_NOINPUT];
+
 	[_project release];
 	_project = [[PBXProject projectWithFile:projectPath] retain];
 	
 	if (!_project)
-		@throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"The '%@' project is corrupted.", projectName] exitCode:EX_DATAERR];
+		@throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"The '%@' project is corrupted.", projectPath] exitCode:EX_DATAERR];
 }
 
 - (void) setTarget:(NSString *)targetName
@@ -319,7 +323,7 @@ static void WorkaroundRadar18512876(void)
 
 - (NSArray *) allowedActions
 {
-	return [NSArray arrayWithObjects:@"list-targets", @"list-headers", @"read-build-setting", @"write-build-setting", @"add-xcconfig", @"add-resources-bundle", @"touch", nil];
+	return [NSArray arrayWithObjects:@"list-targets", @"list-headers", @"read-build-setting", @"write-build-setting", @"add-xcconfig", @"add-resources-bundle", @"put-resource-bundle", @"touch", nil];
 }
 
 - (void) printUsage:(int)exitCode
@@ -341,8 +345,10 @@ static void WorkaroundRadar18512876(void)
 	         @"     Assign a value to a build setting. If the build setting does not exist, it is added to the target\n\n"
 	         @" * add-xcconfig <xcconfig_path>\n"
 	         @"     Add an xcconfig file to the project and base all configurations on it\n\n"
-	         @" * add-resources-bundle <bundle_path>\n"
-	         @"     Add a bundle to the project and in the `Copy Bundle Resources` build phase\n\n"
+	         @" * add-resources-bundle <bundle_paths> ...\n"
+	         @"     Add multiple bundles to default group in the project and in the `Copy Bundle Resources` build phase\n\n"
+             @" * put-resource-bundle <source_file_absolute_path_to_read> [<dest_dir_path> (default=Resources, relative or absolute)>]\n"
+             @"     Copy or rewrite a file, and then Add a bundle to target path in the project and in the `Copy Bundle Resources` build phase\n\n"
 	         @" * touch\n"
 	         @"     Rewrite the project file\n");
 	exit(exitCode);
@@ -460,6 +466,83 @@ static void WorkaroundRadar18512876(void)
 	
 	return [self writeProject];
 }
+
+- (int) putResourceBundle:(NSArray *)arguments
+{
+    if(arguments.count<1 || arguments.count>2){
+        ddprintf(@"Wrong arguments input. See usage\n");
+        [self printUsage:EX_USAGE];
+    }
+
+    //check source file valid
+    NSString * sourceFilePath = [[arguments firstObject] stringByStandardizingPath];
+
+    if (![[NSFileManager defaultManager] fileExistsAtPath:sourceFilePath]){
+        @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A source file %@ does not exists.", sourceFilePath] exitCode:EX_OSFILE];
+    }
+    if (![[NSFileManager defaultManager] isReadableFileAtPath:sourceFilePath]){
+        @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A source file %@ can't read.", sourceFilePath] exitCode:EX_IOERR];
+    }
+    if (![sourceFilePath isAbsolutePath]){
+        @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A path of source file %@ must be absolute path.", sourceFilePath] exitCode:EX_IOERR];
+    }
+
+    NSString * projectTargetGroupName = _target.name;
+    NSString * projectRootPath = [[NSFileManager defaultManager] currentDirectoryPath];
+    NSString * targetPath = [projectRootPath stringByAppendingPathComponent:_target.name];
+    NSString * destFilePath = [targetPath stringByAppendingPathComponent:@"Resources"];
+    //set dest path
+    if(arguments.count==2){
+        destFilePath = [[arguments lastObject] stringByStandardizingPath];
+        if(![destFilePath isAbsolutePath]){
+            destFilePath = [projectRootPath stringByAppendingPathComponent:destFilePath];
+        }
+
+        if(![[destFilePath stringByDeletingLastPathComponent] hasPrefix:projectRootPath]){
+            @throw [DDCliParseException parseExceptionWithReason:[NSString stringWithFormat:@"A path of destination file '%@' must be locate inside of base path of project '%@'.", destFilePath, projectRootPath] exitCode:EX_IOERR];
+        }
+    }
+    destFilePath = [destFilePath stringByAppendingPathComponent:[sourceFilePath lastPathComponent]];
+
+    //resolving relative path
+    NSArray const * relativeDirs = [destFilePath pathComponents];
+    relativeDirs = [relativeDirs subarrayWithRange:NSMakeRange(projectRootPath.pathComponents.count, relativeDirs.count-projectRootPath.pathComponents.count-1)];
+
+    if([[relativeDirs firstObject] isNotEqualTo:projectTargetGroupName]){
+        ddprintf(@"[!] WARNING : A relative path of destination file '%@' is located outside of current TARGET path '%@'.\n", destFilePath, targetPath);
+    }
+
+    @try {
+        [[NSFileManager defaultManager] createDirectoryAtPath:destFilePath withIntermediateDirectories:YES attributes:nil error:NULL];
+
+        NSError *error = nil;
+        if([self atomicCopyItemAtURL:[NSURL fileURLWithPath:sourceFilePath] toURL:[NSURL fileURLWithPath:destFilePath] error:&error]){
+            [relativeDirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+                if(idx==0){
+                    [self addGroupNamed:obj beforeGroupNamed:_project.rootGroup.name];
+                }else{
+                    [self addGroupNamed:obj inGroupNamed:relativeDirs[idx-1]];
+                }
+
+                if([[relativeDirs lastObject] isEqualTo:obj]){
+                    id<PBXFileReference> bundleReference = [self addFileAtPath:destFilePath];
+                    [self addFileReference:bundleReference inGroupNamed:obj];
+                    [self addFileReference:bundleReference toBuildPhase:@"Resources"];
+                }
+            }];
+
+        }else{
+            ddprintf(@"[!] Resource file copy failed.%@\n");
+        }
+
+    }@catch (NSException * exc) {
+        ddprintf(@"File I/O Exception : %@\n", exc.reason);
+        return EX_IOERR;
+    }
+
+    return [self writeProject];
+}
+
 
 - (int) touch:(NSArray *)arguments
 {

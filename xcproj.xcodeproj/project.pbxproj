@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4F71D608E2B691F44F267F73 /* Xcproj+FileUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F71DFC078F05F4B47C98305 /* Xcproj+FileUtils.m */; };
 		8DD76F9A0486AA7600D96B5E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 08FB7796FE84155DC02AAC07 /* main.m */; settings = {ATTRIBUTES = (); }; };
 		8DD76F9C0486AA7600D96B5E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08FB779EFE84155DC02AAC07 /* Foundation.framework */; };
 		C215308619DBE040002524A7 /* XMLPlistDecoder.m in Sources */ = {isa = PBXBuildFile; fileRef = C215308519DBE040002524A7 /* XMLPlistDecoder.m */; };
@@ -24,6 +25,8 @@
 		08FB7796FE84155DC02AAC07 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = Sources/main.m; sourceTree = "<group>"; };
 		08FB779EFE84155DC02AAC07 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
 		32A70AAB03705E1F00C91783 /* xcproj_Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = xcproj_Prefix.pch; path = Sources/xcproj_Prefix.pch; sourceTree = "<group>"; };
+		4F71D5B9A24F620C2593DF81 /* Xcproj+FileUtils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "Xcproj+FileUtils.h"; sourceTree = "<group>"; };
+		4F71DFC078F05F4B47C98305 /* Xcproj+FileUtils.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "Xcproj+FileUtils.m"; sourceTree = "<group>"; };
 		8DD76FA10486AA7600D96B5E /* xcproj */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = xcproj; sourceTree = BUILT_PRODUCTS_DIR; };
 		C215308419DBE040002524A7 /* XMLPlistDecoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = XMLPlistDecoder.h; path = Sources/XMLPlistDecoder.h; sourceTree = "<group>"; };
 		C215308519DBE040002524A7 /* XMLPlistDecoder.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = XMLPlistDecoder.m; path = Sources/XMLPlistDecoder.m; sourceTree = "<group>"; };
@@ -93,6 +96,8 @@
 				DAFF25CB1303ECB100584E0E /* XCDUndocumentedChecker.m */,
 				C215308419DBE040002524A7 /* XMLPlistDecoder.h */,
 				C215308519DBE040002524A7 /* XMLPlistDecoder.m */,
+				4F71DFC078F05F4B47C98305 /* Xcproj+FileUtils.m */,
+				4F71D5B9A24F620C2593DF81 /* Xcproj+FileUtils.h */,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -166,6 +171,7 @@
 			buildPhases = (
 				8DD76F990486AA7600D96B5E /* Sources */,
 				8DD76F9B0486AA7600D96B5E /* Frameworks */,
+				A05ABC2D1B17203A006D0115 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -205,6 +211,22 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		A05ABC2D1B17203A006D0115 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "cp \"${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}\" \"${SRCROO}\"";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		8DD76F990486AA7600D96B5E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -219,6 +241,7 @@
 				C269E99117B3DCCC0099A0C5 /* DDGetoptLongParser.m in Sources */,
 				DAFF25CC1303ECB100584E0E /* XCDUndocumentedChecker.m in Sources */,
 				C269E98F17B3DCCC0099A0C5 /* DDCliParseException.m in Sources */,
+				4F71D608E2B691F44F267F73 /* Xcproj+FileUtils.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
